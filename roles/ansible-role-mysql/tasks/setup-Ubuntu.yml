@@ -1,0 +1,303 @@
+---
+
+- name: Check if vm.swappiness is already set
+  command: grep -q '^vm.swappiness = 1' /etc/sysctl.conf
+  register: vm_swappiness_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Set vm.swappiness to 1 in /etc/sysctl.conf
+  lineinfile:
+    path: /etc/sysctl.conf
+    state: present
+    line: "vm.swappiness = 1"
+  when: vm_swappiness_check.rc != 0
+
+- name: Apply vm.swappiness setting immediately
+  command: sysctl -w vm.swappiness=1
+  #when: vm_swappiness_check.rc != 0
+
+- name: Check if soft limit for MySQL nofile is already set
+  command: grep -q '^mysql soft nofile 4096' /etc/security/limits.conf
+  register: soft_limit_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Check if hard limit for MySQL nofile is already set
+  command: grep -q '^mysql hard nofile 65536' /etc/security/limits.conf
+  register: hard_limit_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Set hard limit for MySQL nofile in /etc/security/limits.conf
+  lineinfile:
+    path: /etc/security/limits.conf
+    state: present
+    line: "mysql hard nofile 65536"
+  become: yes
+  when: hard_limit_check.rc != 0
+
+- name: Apply soft and hard limits for MySQL user
+  lineinfile:
+    path: /etc/security/limits.conf
+    line: "mysql soft nofile 4096"
+    state: present
+  become: yes
+  when: hard_limit_check.rc != 0
+
+- name: Reload limits configuration
+  shell: "sysctl -p"
+  become: yes  
+
+- name: Print OS family
+  debug:
+    var: ansible_os_family
+
+- name: Display OS major and minor version
+  debug:
+    msg: "OS Major version: {{ ansible_distribution_version.split('.')[0] }}, OS Minor version: {{ ansible_distribution_version.split('.')[1] | default('0') }}"
+
+- name: Get the list of installed MySQL packages
+  shell: "ls -al /usr/local/mysql/bin/mysqld | wc -l"
+  register: mysql_package_list
+  changed_when: false
+
+- name: Check if mysqld process is running
+  shell: "ps -ef | grep mysqld | egrep -v 'grep'"
+  register: mysqld_process
+  ignore_errors: true 
+  when: #(mysql_package_list.stdout_lines | length > 0) and (force_initialize == true)
+    - (mysql_package_list.stdout_lines | length > 0)
+    - (force_initialize == true)
+
+- name: Stop the MySQL service
+  systemd:
+    name: mysqld
+    state: stopped
+  when: #(mysql_package_list.stdout_lines | length > 0) and (force_initialize == true)
+    - (mysql_package_list.stdout_lines | length > 0)
+    - (force_initialize == true)
+    - (mysqld_process.stdout != "")
+
+- name: Remove /data directory
+  file:
+    path: /data
+    state: absent
+  ignore_errors: yes
+  when: (force_initialize == true)
+
+- name: Remove MySQL files and directories
+  command: "rm -rf /usr/local/mysql"
+  ignore_errors: yes
+  when: (force_initialize == true)
+
+- name: Remove MySQL files and directories
+  command: "rm -rf /usr/local/mysql-*"
+  ignore_errors: yes
+  when: (rpm_clean_up == true)
+
+- name: Install necessary dependencies on Ubuntu
+  apt:
+    name:
+      - libssl-dev
+      - libncurses5
+      - perl
+      - libjson-perl
+    state: present
+  ignore_errors: true
+  when: dbms == "mysql"
+
+- name: Ensure development tools and Python dependencies are installed on Ubuntu
+  apt:
+    name:
+      - build-essential  # Equivalent to gcc and other build tools
+      - rustc            # Rust compiler
+      - cargo            # Rust package manager
+      - python3-dev      # Python development files
+      - libffi-dev
+      - libssl-dev       # OpenSSL development libraries
+      - python3-pip
+    state: present
+  ignore_errors: true
+
+
+- name: Upgrade pip to the latest version
+  pip:
+    name: pip
+    executable: pip3
+    state: latest
+  ignore_errors: true
+  when: (offline == false)
+
+- name: Install cryptography via pip
+  pip:
+    name: cryptography
+    executable: pip3
+  ignore_errors: true
+  when: (offline == false)
+
+- name: Install PyMySQL via pip
+  pip:
+    name: PyMySQL
+    executable: pip3
+  ignore_errors: true
+  when: (offline == false)
+
+
+- name: Create directory for packages
+  file:
+    path: /tmp/packages
+    state: directory
+  when: (offline == true)
+
+- name: Copy packages.tar to /tmp/packages
+  copy:
+    src: packages.tar
+    dest: /tmp/packages/packages.tar
+  when: (offline == true)
+
+- name: Extract packages.tar
+  unarchive:
+    src: /tmp/packages/packages.tar
+    dest: /tmp/packages
+    remote_src: yes
+  when: (offline == true)
+
+- name: Install Python packages from package.txt
+  command: >
+    pip3 install --no-index --find-links=. -r package.txt
+  args:
+    chdir: /tmp/packages
+  when: (offline == true)
+
+- name: Ensure mysql group exists
+  group:
+    name: mysql
+    state: present
+
+- name: Ensure mysql user exists and is part of mysql group
+  user:
+    name: mysql
+    group: mysql
+    state: present
+
+- name: Create the necessary MySQL directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: '0755'
+  loop:
+    - /data/mysql
+    - /data/mysql/binlog
+    - /data/mysql/dbdata
+    - /data/mysql/log
+    - /data/mysql/redo
+
+- name: Set ownership of /data to mysql user and group
+  file:
+    path: /data
+    state: directory
+    owner: mysql
+    group: mysql
+    recurse: yes
+
+- name: Download MySQL tarball
+  copy:
+    src: "{{ mysql_package }}.tar.xz"
+    dest: /usr/local/{{ mysql_package }}.tar.xz
+
+
+- name: Extract MySQL tarball
+  unarchive:
+    src: /usr/local/{{ mysql_package }}.tar.xz
+    dest: /usr/local/
+    remote_src: yes
+  when: (rpm_clean_up == true)
+
+- name: Move MySQL directory to /usr/local/mysql
+  command:
+    cmd: mv /usr/local/{{ mysql_package }} /usr/local/mysql
+    creates: /usr/local/mysql
+  when: (rpm_clean_up == true)
+
+- name: Remove MySQL tarball
+  file:
+    path: /usr/local/{{ mysql_package }}.tar.xz
+    state: absent
+  when:
+    - (rpm_clean_up == true)
+
+- name: Read current PATH from /etc/environment
+  shell: "grep '^PATH=' /etc/environment | cut -d '=' -f2"
+  register: current_path
+  ignore_errors: true
+
+- name: Add /usr/local/mysql/bin to PATH if not already present
+  lineinfile:
+    path: /etc/environment
+    regexp: '^PATH="'
+    line: "PATH=\"/usr/local/mysql/bin:{{ current_path.stdout | replace('\"', '') }}\""
+    state: present
+  when: "'/usr/local/mysql/bin' not in current_path.stdout"
+
+- name: Get MySQL version.
+  command: '/usr/local/mysql/bin/mysql --version'
+  register: mysql_cli_version
+  changed_when: false
+  check_mode: false
+
+- name: Debug variables
+  debug:
+    var: mysql_mysqlx_socket
+
+- name: Get primary IP address (non-VIP)
+  shell: "hostname -I | awk '{print $1}'"
+  register: ip_address
+  changed_when: false
+
+- name: Remove dots from IP address to create unique mysql_server_id
+  set_fact:
+    mysql_server_id: "{{ ip_address.stdout | regex_replace('\\.', '') }}"
+
+- name: Display the generated mysql_server_id
+  debug:
+    msg: "The generated mysql_server_id is: {{ mysql_server_id }}"
+
+- name: Copy my.cnf global MySQL configuration.
+  template:
+    src: my.cnf.j2
+    dest: "{{ mysql_config_file }}"
+    owner: root
+    group: root
+    mode: 0644
+    force: "{{ overwrite_global_mycnf }}"
+
+- name: Initialize MySQL
+  command: /usr/local/mysql/bin/mysqld --defaults-file=/etc/my.cnf --initialize --lower_case_table_names=1 --user=mysql --console
+  when:
+    - (force_initialize == true)
+
+
+- name: Copy mysqld.service.j2 template to /usr/lib/systemd/system/mysqld.service
+  template:
+    src: mysqld.service.j2
+    dest: /usr/lib/systemd/system/mysqld.service
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Reload systemd to recognize the new service file
+  systemd:
+    daemon_reload: yes
+
+- name: Enable mysqld service
+  systemd:
+    name: mysqld.service
+    enabled: yes
+
+- name: Start mysqld service
+  systemd:
+    name: mysqld.service
+    state: started

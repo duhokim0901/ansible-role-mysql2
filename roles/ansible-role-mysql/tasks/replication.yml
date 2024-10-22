@@ -1,0 +1,71 @@
+---
+#ansible-galaxy collection install community.mysql
+- name: Set MySQL PATH
+  set_fact:
+    mysql_path: "/usr/local/mysql/bin:{{ ansible_env.PATH }}"
+
+- name: Set master host variable for MySQL slaves
+  set_fact:
+    master_host: "{{ hostvars[item]['master_host'] }}"
+  when: hostvars[item]['mysql_replication_role'] == 'slave'
+  with_items: "{{ groups['mysql-server-list'] }}"
+  register: master_hosts  # 전체 결과를 master_hosts로 저장
+
+- name: Debug master host for each slave
+  debug:
+    msg: "Slave {{ inventory_hostname }} has master host: {{ item }}"
+  with_items: "{{ master_hosts.results | selectattr('ansible_facts.master_host', 'defined') | map(attribute='ansible_facts.master_host') | list }}"
+  when: mysql_replication_role == 'slave'
+
+- name: Retrieve master status if slave
+  command: >
+    mysql -h{{ master_host }} -u repl_user -p{{ mysql_root_password }} -e "SHOW MASTER STATUS;"
+  register: master_status
+  changed_when: false  # 쿼리 실행 결과로 변경이 없도록 설정  
+  environment:
+    PATH: "{{ mysql_path }}"  
+  when: mysql_replication_role == 'slave'    
+
+- name: Debug master status
+  debug:
+    var: master_status.stdout_lines
+  when: mysql_replication_role == 'slave'
+
+- name: Set binary log file and position
+  set_fact:
+    SOURCE_LOG_FILE: "{{ master_status.stdout_lines[1].split('\t')[0] }}"
+    SOURCE_LOG_POS: "{{ master_status.stdout_lines[1].split('\t')[1] }}"
+  when: mysql_replication_role == 'slave' and master_status is defined
+
+- name: Print Binlog Position Info
+  debug:
+    msg: "SOURCE_LOG_FILE: {{ SOURCE_LOG_FILE }}, SOURCE_LOG_POS: {{ SOURCE_LOG_POS }}"
+  when: mysql_replication_role == 'slave' and master_status is defined
+
+- name: Change replication source
+  command: >
+    mysql -u root -p{{ mysql_root_password }} -e "STOP REPLICA; RESET REPLICA;"
+  environment:
+    PATH: "{{ mysql_path }}"  
+  when: mysql_replication_role == 'slave' and master_status is defined
+
+- name: Change replication source
+  command: >
+    mysql -u root -p{{ mysql_root_password }} -e "
+    CHANGE REPLICATION SOURCE TO 
+    SOURCE_HOST = '{{ master_host }}', 
+    SOURCE_USER = 'repl_user', 
+    SOURCE_PASSWORD = 'Rhcemdtla2dlsqns!1', 
+    SOURCE_LOG_FILE = '{{ SOURCE_LOG_FILE }}', 
+    SOURCE_LOG_POS = {{ SOURCE_LOG_POS }};"
+  environment:
+    PATH: "{{ mysql_path }}"  
+  when: mysql_replication_role == 'slave' and master_status is defined
+
+
+- name: Start replication
+  command: >
+    mysql -u root -p{{ mysql_root_password }} -e "START REPLICA;"
+  environment:
+    PATH: "{{ mysql_path }}"  
+  when: mysql_replication_role == 'slave' and master_status is defined

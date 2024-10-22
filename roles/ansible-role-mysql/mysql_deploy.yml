@@ -1,0 +1,11 @@
+---
+- name: ansible-role-mysql_deploy
+  gather_facts: true
+  hosts: all
+  become: true
+
+  roles:
+    - ansible-role-mysql      
+
+  vars_files:
+    - roles/ansible-role-mysql/vars/main.yml    

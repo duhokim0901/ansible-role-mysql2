@@ -1,0 +1,156 @@
+---
+- name: Get MySQL version.
+  command: 'mysql --version'
+  register: mysql_cli_version
+  changed_when: false
+  check_mode: false
+
+- name: Copy my.cnf global MySQL configuration.
+  template:
+    src: my.cnf.j2
+    dest: "{{ mysql_config_file }}"
+    owner: root
+    group: root
+    mode: 0644
+    force: "{{ overwrite_global_mycnf }}"
+
+- name: stop mysql
+  service:
+    name: "{{ mysql_daemon }}"
+    state: stopped
+  when: ('8.0.' in mysql_cli_version.stdout)
+
+- name: Remove old MySQL data
+  command: rm -rf /data
+  ignore_errors: yes
+
+- name: Create MySQL data directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /data/mysql/dbdata
+    - /data/mysql/binlog
+    - /data/mysql/redo
+    - /data/mysql/log
+
+- name: Change ownership of /data
+  command: chown -R mysql:mysql /data
+
+- name: Add file context for MySQL databases
+  command: semanage fcontext -a -t mysqld_db_t '/data(/.*)?'
+  ignore_errors: yes
+
+- name: Add file context for MySQL logs
+  command: semanage fcontext -a -t mysqld_log_t '/data/mysql/log(/.*)?'
+  ignore_errors: yes
+
+- name: Restore SELinux contexts
+  command: restorecon -Rv '/data'
+  ignore_errors: yes
+
+- name: Remove old MySQL data
+  command: rm -rf /var/lib/mysql
+  ignore_errors: yes
+
+- name: Ensure MySQL user exists
+  user:
+    name: mysql
+    home: /var/lib/mysql
+    shell: /bin/bash
+    state: present
+
+- name: Ensure the MySQL home directory exists
+  file:
+    path: /var/lib/mysql
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: '0755'
+
+- name: Add file context for MySQL logs
+  command: semanage fcontext -a -t ssh_home_t "/var/lib/mysql/.ssh(/.*)?"
+  ignore_errors: yes
+
+- name: Restore SELinux contexts
+  command: restorecon -Rv '/var/lib/mysql/.ssh'
+  ignore_errors: yes
+
+
+- name: Initialize MySQL
+  command: mysqld --defaults-file=/etc/my.cnf --initialize --lower_case_table_names=1 --user=mysql --console
+#  when: mysql_version.split('.')[0] == '8' 
+
+
+#- name: Verify mysql include directory exists.
+#  file:
+#    path: "{{ mysql_config_include_dir }}"
+#    state: directory
+#    owner: root
+#    group: root
+#    mode: 0755
+#  when: mysql_config_include_files | length
+#
+#- name: Copy my.cnf override files into include directory.
+#  template:
+#    src: "{{ item.src }}"
+#    dest: "{{ mysql_config_include_dir }}/{{ item.src | basename }}"
+#    owner: root
+#    group: root
+#    mode: 0644
+#    force: "{{ item.force | default(False) }}"
+#  with_items: "{{ mysql_config_include_files }}"
+#  notify: restart mysql
+#
+#- name: Create slow query log file (if configured).
+#  command: "touch {{ mysql_slow_query_log_file }}"
+#  args:
+#    creates: "{{ mysql_slow_query_log_file }}"
+#  when: mysql_slow_query_log_enabled
+#
+#- name: Create datadir if it does not exist
+#  file:
+#    path: "{{ mysql_datadir }}"
+#    state: directory
+#    owner: mysql
+#    group: mysql
+#    mode: 0755
+#    setype: mysqld_db_t
+#
+#- name: Set ownership on slow query log file (if configured).
+#  file:
+#    path: "{{ mysql_slow_query_log_file }}"
+#    state: file
+#    owner: mysql
+#    group: "{{ mysql_log_file_group }}"
+#    mode: 0640
+#  when: mysql_slow_query_log_enabled
+#
+#- name: Create error log file (if configured).
+#  command: "touch {{ mysql_log_error }}"
+#  args:
+#    creates: "{{ mysql_log_error }}"
+#  when:
+#    - mysql_log | default(true)
+#    - mysql_log_error | default(false)
+#  tags: ['skip_ansible_galaxy']
+#
+#- name: Set ownership on error log file (if configured).
+#  file:
+#    path: "{{ mysql_log_error }}"
+#    state: file
+#    owner: mysql
+#    group: "{{ mysql_log_file_group }}"
+#    mode: 0640
+#  when:
+#    - mysql_log | default(true)
+#    - mysql_log_error | default(false)
+#  tags: ['skip_ansible_galaxy']
+#
+#- name: Ensure MySQL is started and enabled on boot.
+#  service:
+#    name: "{{ mysql_daemon }}"
+#    state: started
+#    enabled: "{{ mysql_enabled_on_startup }}"
+#  register: mysql_service_configuration
