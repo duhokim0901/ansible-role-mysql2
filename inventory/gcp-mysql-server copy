@@ -1,0 +1,32 @@
+all:
+  children:
+    mysql-server-list:
+      hosts:
+        dev-iaas-mysql-01:
+          ansible_host: 10.171.0.44
+          ansible_port: 22
+          mysql_replication_role: 'slave'
+          master_host: 10.241.1.84
+        dev-iaas-mysql-02:
+          ansible_host: 10.171.0.45
+          ansible_port: 22
+          mysql_replication_role: 'slave'
+          master_host: 10.241.1.84
+        dev-iaas-mysql-03:
+          ansible_host: 10.171.0.46
+          ansible_port: 22
+          mysql_replication_role: 'slave'          
+          master_host: 10.241.1.84
+      vars:
+        ansible_user: wavve
+        ansible_become: true
+        ansible_ssh_private_key_file: ~/keys/gcp/dev.key        
+        ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+        mysql_version: "8.0.39" #mysql 8.0.28 상위부터
+        dbms: "mysql"
+        force_initialize: true #기존설치된걸 삭제하고 싶으면 선택
+        is_pre_task: false #OS환경세팅이 끝났으면 false
+        is_secure_task: true #계정설정
+        rpm_clean_up: true #다운로드 받은 rpm 삭제여부
+        mysql_package: 'mysql-8.0.39-linux-glibc2.12-x86_64' #For Source Install
+        offline: true

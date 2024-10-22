@@ -1,0 +1,70 @@
+---
+#mysql_daemon: mysqld
+mysql_packages: ['mysql-server','mysql','python3-PyMySQL']
+#
+#mysql_enabled_on_startup: true
+#mysql_databases: []
+#mysql_users: [
+  #{
+    #name: "dba_dhkim0901",
+    #host: "%",
+    #password: 'Rhcemdtla2dlsqns!1',
+    #priv: "*.*:ALL",
+    #state: "present"
+  #},
+  #{
+    #name: "dba_dhkim0901",
+    #host: "%",
+    #password: 'Rhcemdtla2dlsqns!1',
+    #priv: "*.*:WITH GRANT OPTION",
+    #state: "present"
+  #},
+  #{
+    #name: "dba_yulhee1020",
+    #host: "%",
+    #password: 'Rhcemdtla2dlsqns!1',
+    #priv: "*.*:ALL",
+    #state: "present"
+  #},
+  #{
+    #name: "dba_yulhee1020",
+    #host: "%",
+    #password: 'Rhcemdtla2dlsqns!1',
+    #priv: "*.*:WITH GRANT OPTION",
+    #state: "present"
+  #}
+#]
+#
+#mysql_port: "3306"
+#mysql_bind_address: '0.0.0.0'
+##mysql_datadir: /data/mysql/dbdata
+#mysql_datadir: /var/lib/mysql
+#mysql_log: ""
+#mysql_log_file_group: mysql
+#mysql_log_error: default
+#mysql_syslog_tag: default
+##mysql_pid_file: /data/mysql/dbdata/mysqld.pid
+##mysql_socket: /data/mysql/dbdata/mysql.sock
+#mysql_pid_file: /var/lib/mysql/mysqld.pid
+#mysql_socket: /var/lib/mysql/mysql.sock
+#
+#mysql_slow_query_log_enabled: true
+#mysql_slow_query_log_file: default
+#mysql_slow_query_time: 1
+#
+#mysql_key_buffer_size: "256M"
+#mysql_max_allowed_packet: "64M"
+#mysql_table_open_cache: "256"
+#
+#mysql_max_binlog_size: "100M"
+#mysql_binlog_format: "ROW"
+#mysql_expire_logs_days: "10"
+#mysql_replication_role: ''
+#mysql_replication_master: ''
+#mysql_replication_user: {}
+#
+##mysql_hide_passwords: false
+#
+#mysql_config_file: default
+#mysql_config_include_dir: /etc/my.cnf.d
+#mysql_supports_innodb_large_prefix: false

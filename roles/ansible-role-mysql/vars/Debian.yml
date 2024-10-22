@@ -1,0 +1,72 @@
+---
+mysql_daemon: mysqld
+mysql_packages: ['mysql-server','mysql','python3-PyMySQL']
+
+mysql_enabled_on_startup: true
+mysql_databases: []
+mysql_users: [
+  {
+    name: "dba_dhkim0901",
+    host: "%",
+    password: 'Rhcemdtla2dlsqns!1',
+    priv: "*.*:ALL,GRANT",
+    state: "present"
+  },
+  {
+    name: "dba_yulhee1020",
+    host: "%",
+    password: 'Rhcemdtla2dlsqns!1',
+    priv: "*.*:ALL,GRANT",
+    state: "present"
+  },
+  {
+    name: "repl_user",
+    host: "%",
+    password: 'Rhcemdtla2dlsqns!1',
+    priv: "*.*:REPLICATION SLAVE,REPLICATION CLIENT",
+    state: "present"
+  }
+]
+
+mysql_port: "3306"
+mysql_bind_address: '0.0.0.0'
+mysql_datadir: /data/mysql/dbdata
+mysql_log: ""
+mysql_log_file_group: mysql
+mysql_log_error: /data/mysql/log/error.log
+mysql_syslog_tag: default
+mysql_pid_file: /data/mysql/dbdata/mysqld.pid
+mysql_socket: /data/mysql/dbdata/mysql.sock
+mysql_mysqlx_socket: /data/mysql/dbdata/mysqlx.sock
+mysql_binlog_dir: /data/mysql/binlog
+
+mysql_slow_query_log_enabled: true
+mysql_slow_query_log_file: /data/mysql/log/slow.log
+mysql_slow_query_time: 1
+
+mysql_key_buffer_size: "256M"
+mysql_max_allowed_packet: "64M"
+mysql_table_open_cache: "256"
+
+mysql_max_binlog_size: "100M"
+mysql_binlog_format: "ROW"
+mysql_expire_logs_days: "10"
+mysql_replication_user: {
+    name: "repl_user",
+    host: "%",
+    password: 'Rhcemdtla2dlsqns!1',
+    priv: "*.*:REPLICATION SLAVE,REPLICATION CLIENT",
+    state: "present"
+}
+
+#mysql_hide_passwords: false
+
+mysql_config_file: /etc/my.cnf
+mysql_config_include_dir: /etc/my.cnf.d
+mysql_supports_innodb_large_prefix: false
+mysql_default_time_zone: '-9:00'
+mysql_character_set_server: utf8mb4
+mysql_collation_server: utf8mb4_general_ci
+mysql_lower_case_table_names: 1
+mysql_skip_name_resolve: true
+mysql_default_authentication_plugin: 'mysql_native_password'

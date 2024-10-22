@@ -1,0 +1,159 @@
+---
+
+- name: Get primary IP address (non-VIP)
+  shell: "hostname -I | awk '{print $1}'"
+  register: ip_address
+  changed_when: false
+
+- name: Remove dots from IP address to create unique mysql_server_id
+  set_fact:
+    mysql_server_id: "{{ ip_address.stdout | regex_replace('\\.', '') }}"
+
+- name: Display the generated mysql_server_id
+  debug:
+    msg: "The generated mysql_server_id is: {{ mysql_server_id }}"
+
+- name: Check installed MySQL packages
+  command: rpm -q mysql-community-{{ item }}
+  loop:
+    - client
+    - common
+    - devel
+    - libs
+    - server
+    - test
+    - client-plugins
+    - debugsource
+    - icu-data-files
+    - server-debug
+  register: rpm_check
+  ignore_errors: true
+
+- name: Set fact for installed packages
+  set_fact:
+    installed_packages: "{{ installed_packages | default([]) + [item | regex_replace('^mysql-community-', '')] }}"
+  loop: "{{ rpm_check.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+
+- name: Check if MySQL community packages are already downloaded
+  stat:
+    path: "/tmp/mysql-community-{{ item }}-{{ mysql_version }}-1.el8.x86_64.rpm"
+  loop:
+    - client
+    - common
+    - devel
+    - libs
+    - server
+    - test
+    - client-plugins
+    - debugsource
+    - icu-data-files
+    - server-debug
+  register: rpm_files
+  loop_control:
+    loop_var: item  # 명시적으로 loop 변수 지정
+
+- name: Extract only the item from rpm_files results
+  set_fact:
+    downloaded_items: "{{ rpm_files.results | map(attribute='item') | list }}"
+
+- name: Download MySQL community packages
+  get_url:
+    url: "http://repo.mysql.com/yum/mysql-{{ mysql_version.split('.')[0] }}.{{ mysql_version.split('.')[1] }}-community/el/8/x86_64/mysql-community-{{ item }}-{{ mysql_version }}-1.el8.x86_64.rpm"
+    dest: "/tmp/"
+  loop:
+    - client
+    - common
+    - devel
+    - libs
+    - server
+    - test
+    - client-plugins
+    - debugsource
+    - icu-data-files
+    - server-debug
+  when: (dbms == "mysql" and item not in downloaded_items) or (dbms == "mysql" and installed_packages is undefined)
+
+
+
+- name: Install downloaded MySQL packages
+  shell: "rpm -Uvh /tmp/mysql-community-{{ item }}-{{ mysql_version }}-1.el8.x86_64.rpm"
+  loop:
+    - common
+    - client-plugins
+    - libs
+    - client
+    - icu-data-files
+    - server
+    - server-debug
+    - devel
+    - test
+  args:
+    warn: false
+  when: (dbms == "mysql" and item not in installed_packages) or (dbms == "mysql" and installed_packages is undefined)
+
+
+- name: Clean up downloaded packages
+  file:
+    path: "/tmp/mysql-community-{{ item }}-{{ mysql_version }}-1.el8.x86_64.rpm"
+    state: absent
+  loop:
+    - client
+    - common
+    - devel
+    - libs
+    - server
+    - test
+    - client-plugins
+    - debugsource
+    - icu-data-files
+    - server-debug
+  when: ( dbms == "mysql" and rpm_clean_up == true )
+
+#- name: Override variables for MySQL (RedHat).
+  #set_fact:
+    #mysql_daemon: mysqld
+    #mysql_packages: ['python3-PyMySQL'] #['mysql-server','mysql','python3-PyMySQL'] Rocky 나 Redhat에서는 패키지 검사 대상을 python3-PyMySQL만
+    #mysql_enabled_on_startup: true
+    #mysql_port: "3306"
+    #mysql_bind_address: '0.0.0.0'
+    #mysql_datadir: /data/mysql/dbdata
+    #mysql_log: ""
+    #mysql_log_file_group: mysql
+    #mysql_log_error: default
+    #mysql_syslog_tag: default
+    #mysql_pid_file: /data/mysql/dbdata/mysqld.pid
+    #mysql_socket: /data/mysql/dbdata/mysql.sock
+    #mysql_slow_query_log_enabled: false
+    #mysql_slow_query_log_file: default
+    #mysql_slow_query_time: 1
+    #mysql_key_buffer_size: "256M"
+    #mysql_max_allowed_packet: "64M"
+    #mysql_table_open_cache: "256"
+    #mysql_max_binlog_size: "100M"
+    #mysql_binlog_format: "ROW"
+    #mysql_expire_logs_days: "10"
+    #mysql_replication_role: ''
+    #mysql_replication_master: ''
+    #mysql_replication_user: {}
+    #mysql_hide_passwords: false
+    #mysql_config_file: default
+    #mysql_config_include_dir: default
+    #mysql_supports_innodb_large_prefix: false
+  #when: (ansible_os_family in ["RedHat","Rocky"] and dbms == "mysql")
+
+#- name: Ensure MySQL is stopped after initial install.
+  #service:
+    #name: "{{ mysql_daemon }}"
+    #state: stopped
+  #when: not mysql_installed.stat.exists
+#
+#- name: Delete innodb log files created by apt package after initial install.
+  #file:
+    #path: "{{ mysql_datadir }}/{{ item }}"
+    #state: absent
+  #with_items:
+    #- ib_logfile0
+    #- ib_logfile1
+  #when: >
+    #not mysql_installed.stat.exists
+    #and ansible_distribution_major_version | int < 12
