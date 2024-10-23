@@ -30,3 +30,8 @@ all:
         rpm_clean_up: true #다운로드 받은 rpm 삭제여부
         mysql_package: 'mysql-8.0.39-linux-glibc2.12-x86_64' #For Source Install
         offline: true
+        ssh_user: mysql
+        ssh_key_dir: /home/mysql/.ssh
+        ssh_key_file: id_rsa
+        ssh_key_passphrase: ""
+        delete_existing_key: true                

@@ -1,0 +1,183 @@
+---
+- name: Ensure SSH settings for PubkeyAuthentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PubkeyAuthentication'
+    line: 'PubkeyAuthentication yes'
+    state: present
+  become: true
+
+- name: Ensure SSH settings for PasswordAuthentication (optional)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin yes'
+    state: present
+  become: true
+
+- name: Ensure SSH settings for PasswordAuthentication (optional)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication yes'
+    state: present
+  become: true
+
+- name: Restart SSH service
+  service:
+    name: sshd
+    state: restarted
+  become: true
+
+- name: Backup root's authorized_keys
+  become: true
+  command:
+    cmd: cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bak
+
+- name: Replace root's authorized_keys with ansible_user's authorized_keys
+  become: true
+  command:
+    cmd: "cp /home/{{ ansible_user }}/.ssh/authorized_keys /root/.ssh/authorized_keys"
+
+
+- name: Ensure the SSH directory exists
+  file:
+    path: "{{ ssh_key_dir }}"
+    state: directory
+    owner: "{{ ssh_user }}"
+    group: "{{ ssh_user }}"
+    mode: '0700'
+
+- name: Check if the SSH authorized key exists
+  stat:
+    path: "{{ ssh_key_dir }}/authorized_keys"
+  register: authorized_key
+
+- name: Check if the SSH public key exists
+  stat:
+    path: "{{ ssh_key_dir }}/id_rsa.pub"
+  register: ssh_key
+
+- name: Delete existing SSH keys if specified
+  file:
+    path: "{{ ssh_key_dir }}/id_rsa"
+    state: absent
+  when: delete_existing_key | default(false) and ssh_key.stat.exists
+
+- name: Delete existing SSH public key if specified
+  file:
+    path: "{{ ssh_key_dir }}/id_rsa.pub"
+    state: absent
+  when: delete_existing_key | default(false) and ssh_key.stat.exists
+
+- name: Delete existing authorized_keys file if it exists
+  file:
+    path: "{{ ssh_key_dir }}/authorized_keys"
+    state: absent
+  when: delete_existing_key | default(false) and authorized_key.stat.exists
+
+- name: Generate SSH key pair
+  command: >
+    sudo -u mysql ssh-keygen -t rsa -b 4096 -f {{ ssh_key_dir }}/id_rsa -N ""
+  args:
+    creates: "{{ ssh_key_dir }}/id_rsa"
+  register: ssh_keygen_result
+  when: delete_existing_key | default(false)
+
+- name: Debug SSH key generation result
+  debug:
+    var: ssh_keygen_result
+
+- name: Fetch public key from current server
+  slurp:
+    src: "{{ ssh_key_dir }}/id_rsa.pub"
+  register: current_public_key
+
+- name: Ensure the MySQL home directory exists
+  file:
+    path: /root/keys/aws
+    state: directory
+    mode: '0755'
+
+- name: Ensure the MySQL home directory exists
+  file:
+    path: /root/keys/gcp
+    state: directory
+    mode: '0755'
+
+
+- name: Copy local file to remote server
+  copy:
+    src: "{{ ansible_ssh_private_key_file }}" # 로컬 파일 경로
+    dest: "{{ ansible_ssh_private_key_file }}" # 원격 서버의 대상 경로
+
+- name: Add public key to authorized_keys on other servers
+  remote_user: root
+  authorized_key:
+    user: mysql
+    state: present
+    key: "{{ current_public_key.content | b64decode }}"
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['mysql-server-list'] | map('extract', hostvars, 'ansible_host') | list }}"
+  #when: inventory_hostname != item
+
+- name: Backup root's authorized_keys
+  become: true
+  command:
+    cmd: cp /root/.ssh/authorized_keys.bak /root/.ssh/authorized_keys
+
+
+- name: Remove backup of root's authorized_keys
+  become: true
+  file:
+    path: /root/.ssh/authorized_keys.bak
+    state: absent
+
+
+- name: Check if the SELinux context is already defined
+  shell: semanage fcontext -l | grep '{{ ssh_key_dir }}' || true #파이프(|)와 같은 셸 기능은 command 에서 지원이 안되어서 shell 로 변경
+  register: secontext_check
+  ignore_errors: true
+  when: ansible_os_family in ['RedHat','Rocky']
+
+- name: Add or modify the SELinux context for the directory and its files
+  command: >
+    semanage fcontext -m -t ssh_home_t '{{ ssh_key_dir }}(/.*)?'
+  when: 
+    - secontext_check.rc == 0  # secontext_check 의 리턴코드(rc)가 성공적으로 실행됨(=0), 보안컨텍스트가 이미 정의됨을 의미
+    - ansible_os_family in ['RedHat','Rocky']
+  
+
+- name: Add SELinux context if not already defined
+  command: >
+    semanage fcontext -a -t ssh_home_t '/var/lib/mysql/.ssh(/.*)?'
+  when: 
+    - secontext_check.rc != 0  # secontext_check 의 리턴코드(rc)가 성공적으로 실행됨(!=0)), 보안컨텍스트가 정의되지 않은 경우
+    - ansible_os_family in ['RedHat','Rocky']
+
+- name: Restore SELinux context on files
+  command: restorecon -R -v /var/lib/mysql/.ssh
+  when: ansible_os_family in ['RedHat','Rocky']
+
+
+- name: Ensure SSH settings for PasswordAuthentication (optional)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    state: present
+  become: true
+
+- name: Ensure SSH settings for PasswordAuthentication (optional)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+  become: true
+
+- name: Restart SSH service
+  service:
+    name: sshd
+    state: restarted
+  become: true

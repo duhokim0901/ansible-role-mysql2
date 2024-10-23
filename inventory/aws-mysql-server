@@ -6,20 +6,26 @@ all:
           ansible_host: 10.241.1.84
           ansible_port: 22
           mysql_replication_role: 'master'
+          ansible_user: ubuntu
+          ansible_become: true
+          ansible_ssh_private_key_file: ~/keys/aws/dev-service.pem               
         dev-iaas-mysql-102:
           ansible_host: 10.241.1.141
           ansible_port: 22
           mysql_replication_role: 'slave'
           master_host: 10.241.1.84
+          ansible_user: ubuntu
+          ansible_become: true
+          ansible_ssh_private_key_file: ~/keys/aws/dev-service.pem               
         dev-iaas-mysql-103:
           ansible_host: 10.241.1.82
           ansible_port: 22
           mysql_replication_role: 'slave'          
           master_host: 10.241.1.84
-      vars:
-        ansible_user: ubuntu
-        ansible_become: true
-        ansible_ssh_private_key_file: ~/keys/aws/dev-service.pem        
+          ansible_user: ubuntu
+          ansible_become: true
+          ansible_ssh_private_key_file: ~/keys/aws/dev-service.pem               
+      vars:   
         ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
         mysql_version: "8.0.39" #mysql 8.0.28 상위부터
         dbms: "mysql"
@@ -29,3 +35,8 @@ all:
         rpm_clean_up: true #다운로드 받은 rpm 삭제여부
         mysql_package: 'mysql-8.0.39-linux-glibc2.12-x86_64' #For Source Install
         offline: false
+        ssh_user: mysql
+        ssh_key_dir: /home/mysql/.ssh
+        ssh_key_file: id_rsa
+        ssh_key_passphrase: ""
+        delete_existing_key: true        
