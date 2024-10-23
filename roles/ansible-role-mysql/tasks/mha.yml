@@ -1,0 +1,49 @@
+---
+
+- name: Update apt repository
+  apt:
+    update_cache: yes
+
+- name: Install dependencies
+  apt:
+    name:
+      - gcc
+      - make
+      - libdbi-perl
+      - libdbd-mysql-perl
+      - libio-socket-ssl-perl
+      - libconfig-tiny-perl
+      - liblog-dispatch-perl
+      - libparallel-forkmanager-perl
+    state: present
+
+- name: Copy mha4mysql-node package to the server
+  copy:
+    src: ./mha4mysql-node-0.58.tar.gz
+    dest: /tmp/mha4mysql-node-0.58.tar.gz
+    mode: '0644'
+
+- name: Extract mha4mysql-node package
+  shell:
+    cmd: tar xvf /tmp/mha4mysql-node-0.58.tar.gz
+
+- name: Configure CPAN non-interactively
+  shell:
+    cmd: |
+      (echo yes; echo o conf commit) | cpan
+
+- name: Install Module::Install using cpan
+  copy:
+    src: ./Install.pod
+    dest: /usr/local/share/perl/5.30.0/Module/Install.pod
+    mode: '0644'
+
+
+- name: Build and install mha4mysql-node
+  shell:
+    cmd: |
+      perl Makefile.PL
+      make
+      make install
+    args:
+      chdir: /tmp/mha4mysql-node-0.58
