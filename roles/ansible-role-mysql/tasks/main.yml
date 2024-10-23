@@ -4,36 +4,36 @@
   debug:
     msg: "OS Family: {{ ansible_os_family }}"
 
-#- include_tasks: pre_task.yml
-#  when: (is_pre_task == true and mysql_version.split('.')[0] == '8' and ansible_os_family in ['RedHat','Rocky']) 
-#
-## Variable configuration.
-#- include_tasks: variables.yml
-#
-## Setup/install tasks.
-#- include_tasks: setup-RedHat.yml
-#  when: ansible_os_family in ['RedHat','Rocky']
-#
-#- include_tasks: setup-Ubuntu.yml
-#  when: ansible_os_family == 'Debian'
-#
-#- name: Check if MySQL packages were installed.
-#  set_fact:
-#    mysql_install_packages: "{{ (rh_mysql_install_packages is defined and rh_mysql_install_packages.changed)
-#      or (deb_mysql_install_packages is defined and deb_mysql_install_packages.changed)
-#      or (arch_mysql_install_packages is defined and arch_mysql_install_packages.changed) }}"
-#
-### Configure MySQL.
-#- include_tasks: configure.yml
-#  when: ansible_os_family in ['RedHat','Rocky']
-#
-#- include_tasks: secure-installation.yml
-#  when: is_secure_task == true
-#
-#- include_tasks: databases.yml
-#
-#- include_tasks: users.yml
-#
-#- include_tasks: replication.yml
-#
+- include_tasks: pre_task.yml
+  when: (is_pre_task == true and mysql_version.split('.')[0] == '8' and ansible_os_family in ['RedHat','Rocky']) 
+
+# Variable configuration.
+- include_tasks: variables.yml
+
+# Setup/install tasks.
+- include_tasks: setup-RedHat.yml
+  when: ansible_os_family in ['RedHat','Rocky']
+
+- include_tasks: setup-Ubuntu.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Check if MySQL packages were installed.
+  set_fact:
+    mysql_install_packages: "{{ (rh_mysql_install_packages is defined and rh_mysql_install_packages.changed)
+      or (deb_mysql_install_packages is defined and deb_mysql_install_packages.changed)
+      or (arch_mysql_install_packages is defined and arch_mysql_install_packages.changed) }}"
+
+## Configure MySQL.
+- include_tasks: configure.yml
+  when: ansible_os_family in ['RedHat','Rocky']
+
+- include_tasks: secure-installation.yml
+  when: is_secure_task == true
+
+- include_tasks: databases.yml
+
+- include_tasks: users.yml
+
+- include_tasks: replication.yml
+
 - include_tasks: pubkey.yml
