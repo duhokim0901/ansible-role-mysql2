@@ -14,7 +14,9 @@
       - libio-socket-ssl-perl
       - libconfig-tiny-perl
       - liblog-dispatch-perl
+      - libmodule-install-perl      
       - libparallel-forkmanager-perl
+      - cpanminus
     state: present
 
 - name: Copy mha4mysql-node package to the server
@@ -23,27 +25,48 @@
     dest: /tmp/mha4mysql-node-0.58.tar.gz
     mode: '0644'
 
-- name: Extract mha4mysql-node package
-  shell:
-    cmd: tar xvf /tmp/mha4mysql-node-0.58.tar.gz
+- name: Extract mha4mysql-node archive if directory does not exist
+  shell: tar xvf mha4mysql-node-0.58.tar.gz
+  args:
+    chdir: /tmp
 
-- name: Configure CPAN non-interactively
-  shell:
-    cmd: |
-      (echo yes; echo o conf commit) | cpan
+#오프라인으로 필요한 perl 모듈 설치 시작
 
-- name: Install Module::Install using cpan
+- name: Create directory on each host
+  file:
+    path: /usr/local/share/perl/5.30.0/Module/
+    state: directory
+    mode: '0755'
+
+- name: Copy Install.pod to the remote directory
   copy:
     src: ./Install.pod
-    dest: /usr/local/share/perl/5.30.0/Module/Install.pod
+    dest: /usr/local/share/perl/5.30.0/Module/
+    owner: root
+    group: root
     mode: '0644'
+
+#오프라인으로 필요한 perl 모듈 설치 종료
+
+
+
+# 아웃바운드 막혀있으면 불가
+#- name: Configure CPAN non-interactively
+#  shell:
+#    cmd: |
+#      (echo yes; echo o conf commit) | cpan
+#
+#- name: Install Module::Install using cpan
+#  copy:
+#    src: ./Install.pod
+#    dest: /usr/local/share/perl/5.30.0/Module/Install.pod
+#    mode: '0644'
 
 
 - name: Build and install mha4mysql-node
-  shell:
-    cmd: |
-      perl Makefile.PL
-      make
-      make install
-    args:
-      chdir: /tmp/mha4mysql-node-0.58
+  shell: |
+    perl Makefile.PL
+    make
+    make install
+  args:
+    chdir: /tmp/mha4mysql-node-0.58
